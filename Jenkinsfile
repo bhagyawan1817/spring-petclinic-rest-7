@@ -37,6 +37,18 @@ pipeline {
                 sh './mvnw test jacoco:report || true'
             }
         }
+        
+        stage('Start App (background)') {
+            steps {
+                sh '''
+                    nohup ./mvnw spring-boot:run \
+                      -Dspring-boot.run.arguments=--server.port=9966 \
+                      > app.log 2>&1 &
+                    sleep 25
+                '''
+            }
+        }
+
         stage('Performance Test (JMeter – report only)') {
             steps {
                 sh '''
