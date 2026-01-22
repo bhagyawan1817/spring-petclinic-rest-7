@@ -37,26 +37,38 @@ pipeline {
                 sh './mvnw test jacoco:report || true'
             }
         }
+        stage('Performance Test (JMeter – report only)') {
+            steps {
+                sh '''
+                    /usr/local/bin/jmeter \
+                        -n \
+                        -t jmeter/petclinic-smoke.jmx \
+                        -l target/jmeter-results.jtl \
+                        -JHOST=127.0.0.1 \
+                        -JPORT=9966 \
+                  || true
+                '''
+            }
+        }
     }
     post {
         always {
-            junit '**/target/surefire-reports/*.xml'
-        }
-    }
-    // post {
-    // always {
-    //     warnings(
-    //         canResolveRelativePaths: true,
-    //         parserConfigurations: [
-    //             checkstyle(pattern: '**/checkstyle-result.xml'),
-    //             // spotbugs(pattern: '**/spotbugsXml.xml'),
-    //             // pmdParser(pattern: '**/pmd.xml')
-    //         ]
-    //     )
 
-    //     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    //}
-    // }
+            // Unit test reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                junit allowEmptyResults: true,
+                    testResults: '**/target/surefire-reports/*.xml'
+            }
+          // JMeter performance reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                performanceReport parsers: [
+                    jmeterParser(
+                        pattern: 'target/jmeter-results.jtl'
+                    )
+                ]
+            }
+        }  
+    }
 }
 
 
