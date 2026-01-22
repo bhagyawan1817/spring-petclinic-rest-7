@@ -41,11 +41,11 @@ pipeline {
             steps {
                 sh '''
                     /usr/local/bin/jmeter \
-                    -n \
-                    -t jmeter/petclinic-smoke.jmx \
-                    -l target/jmeter-results.jtl \
-                    -JHOST=localhost \
-                    -JPORT=9966 \
+                        -n \
+                        -t jmeter/petclinic-smoke.jmx \
+                        -l target/jmeter-results.jtl \
+                        -JHOST=127.0.0.1 \
+                        -JPORT=9966 \
                   || true
                 '''
             }
