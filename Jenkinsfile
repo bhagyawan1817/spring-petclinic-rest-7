@@ -32,7 +32,16 @@ pipeline {
                 sh './mvnw org.owasp:dependency-check-maven:check || true'
             }
         }
-
+        stage('Unit Tests with Coverage') {
+            steps {
+                sh './mvnw test jacoco:report || true'
+            }
+        }
+    }
+    post {
+        always {
+            junit '**/target/surefire-reports/*.xml'
+        }
     }
     // post {
     // always {
