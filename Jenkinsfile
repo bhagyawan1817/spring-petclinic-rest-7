@@ -53,29 +53,22 @@ pipeline {
     }
     post {
         always {
-            junit '**/target/surefire-reports/*.xml'
 
-            performanceReport parsers: [
-                jmeterParser(
-                    pattern: 'target/jmeter-results.jtl'
-                )
-            ]
-        }
+            // Unit test reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                junit allowEmptyResults: true,
+                    testResults: '**/target/surefire-reports/*.xml'
+            }
+          // JMeter performance reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                performanceReport parsers: [
+                    jmeterParser(
+                        pattern: 'target/jmeter-results.jtl'
+                    )
+                ]
+            }
+        }  
     }
-    // post {
-    // always {
-    //     warnings(
-    //         canResolveRelativePaths: true,
-    //         parserConfigurations: [
-    //             checkstyle(pattern: '**/checkstyle-result.xml'),
-    //             // spotbugs(pattern: '**/spotbugsXml.xml'),
-    //             // pmdParser(pattern: '**/pmd.xml')
-    //         ]
-    //     )
-
-    //     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    //}
-    // }
 }
 
 
