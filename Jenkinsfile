@@ -37,10 +37,29 @@ pipeline {
                 sh './mvnw test jacoco:report || true'
             }
         }
+        stage('Performance Test (JMeter – report only)') {
+            steps {
+                sh '''
+                    jmeter \
+                        -n \
+                        -t jmeter/petclinic-smoke.jmx \
+                        -l target/jmeter-results.jtl \
+                        -JHOST=localhost \
+                        -JPORT=9966 \
+                    ||true
+                '''
+            }
+        }
     }
     post {
         always {
             junit '**/target/surefire-reports/*.xml'
+
+            performanceReport parsers: [
+                jmeterParser(
+                    pattern: 'target/jmeter-results.jtl'
+                )
+            ]
         }
     }
     // post {
