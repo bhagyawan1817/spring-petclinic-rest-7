@@ -34,20 +34,20 @@ pipeline {
         }
 
     }
-    post {
-    always {
-        warnings(
-            canResolveRelativePaths: true,
-            parserConfigurations: [
-                checkstyle(pattern: '**/checkstyle-result.xml'),
-                // spotbugs(pattern: '**/spotbugsXml.xml'),
-                // pmdParser(pattern: '**/pmd.xml')
-            ]
-        )
+    // post {
+    // always {
+    //     warnings(
+    //         canResolveRelativePaths: true,
+    //         parserConfigurations: [
+    //             checkstyle(pattern: '**/checkstyle-result.xml'),
+    //             // spotbugs(pattern: '**/spotbugsXml.xml'),
+    //             // pmdParser(pattern: '**/pmd.xml')
+    //         ]
+    //     )
 
-        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    }
-}
+    //     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+    //}
+    // }
 }
 
 
