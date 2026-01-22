@@ -40,13 +40,13 @@ pipeline {
         stage('Performance Test (JMeter – report only)') {
             steps {
                 sh '''
-                    jmeter \
-                        -n \
-                        -t jmeter/petclinic-smoke.jmx \
-                        -l target/jmeter-results.jtl \
-                        -JHOST=localhost \
-                        -JPORT=9966 \
-                    ||true
+                    /usr/local/bin/jmeter \
+                    -n \
+                    -t jmeter/petclinic-smoke.jmx \
+                    -l target/jmeter-results.jtl \
+                    -JHOST=localhost \
+                    -JPORT=9966 \
+                  || true
                 '''
             }
         }
