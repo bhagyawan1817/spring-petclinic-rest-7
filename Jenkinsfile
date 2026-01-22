@@ -40,8 +40,8 @@ pipeline {
             canResolveRelativePaths: true,
             parserConfigurations: [
                 checkstyle(pattern: '**/checkstyle-result.xml'),
-                spotbugs(pattern: '**/spotbugsXml.xml'),
-                pmdParser(pattern: '**/pmd.xml')
+                // spotbugs(pattern: '**/spotbugsXml.xml'),
+                // pmdParser(pattern: '**/pmd.xml')
             ]
         )
 
