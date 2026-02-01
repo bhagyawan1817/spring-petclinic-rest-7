@@ -64,6 +64,17 @@ pipeline {
             }
         }
 
+        stage('API Coverage Check (BLOCKING)') {
+            steps {
+                sh '''
+                    cd api-tests
+                    python3 coverage/extract_openapi.py
+                    python3 coverage/extract_tested_apis.py
+                    python3 coverage/check_coverage.py
+                '''
+            }
+        }
+
         stage('Performance Test (JMeter – report only)') {
             steps {
                 sh '''
@@ -91,7 +102,7 @@ pipeline {
                     testResults: '**/target/surefire-reports/*.xml'
             }
 
-            // API test reports (blocking already happened)
+            // API test reports (non-blocking; failure already blocks earlier)
             catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
                 junit allowEmptyResults: true,
                     testResults: 'api-tests/**/pytest*.xml'
