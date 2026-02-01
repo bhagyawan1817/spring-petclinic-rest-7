@@ -107,6 +107,10 @@ pipeline {
                 junit allowEmptyResults: true,
                     testResults: 'api-tests/**/pytest*.xml'
             }
+            // API Coverage report (always archive)
+            archiveArtifacts artifacts: 'api-tests/coverage/api_coverage_report.txt',
+                allowEmptyArchive: true
+
 
             // JMeter performance reports (non-blocking)
             catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
