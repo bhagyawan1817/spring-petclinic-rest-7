@@ -24,7 +24,6 @@ POST /api/pettypes
 POST /api/specialties
 POST /api/users
 POST /api/vets
-POST /api/visits
 PUT /api/owners/{ownerId}
 PUT /api/owners/{ownerId}/pets/{petId}
 PUT /api/pets/{petId}

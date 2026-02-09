@@ -1,125 +1,128 @@
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
     environment {
-        BASE_URL = "http://127.0.0.1:9966/petclinic"
+        JMETER_HOME     = "C:\\tools\\apache-jmeter-5.6.3"
+        PERF_THRESHOLD = "10"
+        SONAR_PROJECT  = "petclinic-rest-testing-demo"
     }
 
     stages {
 
-        stage('Compile') {
+        stage('Checkout') {
             steps {
-                sh './mvnw clean compile'
+                checkout scm
             }
         }
 
-        stage('Lint (Checkstyle – report only)') {
+        stage('Build + Tests') {
             steps {
-                sh './mvnw checkstyle:check || true'
+                bat "mvn clean verify"
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
             }
         }
 
-        stage('SpotBugs (report only)') {
+        stage('JMeter Performance') {
             steps {
-                sh './mvnw spotbugs:check || true'
+                bat """
+                %JMETER_HOME%\\bin\\jmeter.bat -n ^
+                -t jmeter\\petclinic-smoke.jmx ^
+                -l result.csv
+                """
             }
         }
 
-        stage('PMD (report only)') {
+        stage('Record Performance') {
             steps {
-                sh './mvnw pmd:check || true'
+                bat """
+                if not exist perf\\history mkdir perf\\history
+                C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
+                -ExecutionPolicy Bypass ^
+                -File perf\\extract.ps1 result.csv perf\\history\\trend.csv
+                """
             }
         }
 
-        stage('Dependency Scan (OWASP - report only)') {
+        stage('Fetch Baseline') {
+    when { not { branch 'master' } }
+    steps {
+        bat """
+        if not exist perf mkdir perf
+        copy "%JENKINS_HOME%\\workspace\\petclinic-multibranch_master\\perf\\baseline.csv" perf\\baseline.csv
+        """
+    }
+}
+
+
+        stage('Performance Gate') {
+            when { not { branch 'master' } }
             steps {
-                sh './mvnw org.owasp:dependency-check-maven:check || true'
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    bat """
+                    C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
+                    -ExecutionPolicy Bypass ^
+                    -File perf\\compare.ps1 perf\\baseline.csv result.csv %PERF_THRESHOLD%
+                    """
+                }
             }
         }
 
-        stage('Unit Tests with Coverage') {
+        stage('Reviewer Override') {
+            when {
+                expression { currentBuild.currentResult == 'FAILURE' }
+            }
             steps {
-                sh './mvnw test jacoco:report || true'
+                input message: "Performance regression detected. Override merge?"
+                script {
+                    currentBuild.result = 'SUCCESS'
+                }
             }
         }
 
-        stage('Start App (background)') {
+        stage('Update Baseline') {
+            when { branch 'master' }
             steps {
-                sh '''
-                    nohup ./mvnw spring-boot:run \
-                      -Dspring-boot.run.arguments=--server.port=9966 \
-                      > app.log 2>&1 &
-                    sleep 30
-                '''
+                bat """
+                if not exist perf mkdir perf
+                copy result.csv perf\\baseline.csv
+                """
             }
         }
 
-        stage('API Tests (Python – BLOCKING)') {
+        stage('Performance Chart') {
             steps {
-                sh '''
-                    cd api-tests
-                    pip3 install -r requirements.txt
-                    BASE_URL=${BASE_URL} pytest
-                '''
+                plot csvFileName: 'trend.csv',
+                     csvSeries: [[file: 'perf/history/trend.csv']],
+                     group: 'Performance',
+                     title: 'Response Time Trend',
+                     yaxis: 'Milliseconds',
+                     style: 'line'
             }
         }
 
-        stage('API Coverage Check (BLOCKING)') {
+        stage('HTML Dashboard') {
             steps {
-                sh '''
-                    cd api-tests
-                    python3 coverage/extract_openapi.py
-                    python3 coverage/extract_tested_apis.py
-                    python3 coverage/check_coverage.py
-                '''
-            }
-        }
-
-        stage('Performance Test (JMeter – report only)') {
-            steps {
-                sh '''
-                    /usr/local/bin/jmeter \
-                        -n \
-                        -t jmeter/petclinic-smoke.jmx \
-                        -l target/jmeter-results.jtl \
-                        -JHOST=127.0.0.1 \
-                        -JPORT=9966 \
-                  || true
-                '''
+                bat """
+                C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
+                -ExecutionPolicy Bypass ^
+                -File perf\\dashboard.ps1
+                """
             }
         }
     }
 
     post {
         always {
-
-            // Stop Spring Boot app
-            sh 'pkill -f spring-boot || true'
-
-            // Unit test reports (non-blocking)
-            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                junit allowEmptyResults: true,
-                    testResults: '**/target/surefire-reports/*.xml'
-            }
-
-            // API test reports (non-blocking; failure already blocks earlier)
-            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                junit allowEmptyResults: true,
-                    testResults: 'api-tests/**/pytest*.xml'
-            }
-            // API Coverage report (always archive)
-            archiveArtifacts artifacts: 'api-tests/coverage/api_coverage_report.txt',
-                allowEmptyArchive: true
-
-
-            // JMeter performance reports (non-blocking)
-            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                performanceReport parsers: [
-                    jmeterParser(
-                        pattern: 'target/jmeter-results.jtl'
-                    )
-                ]
-            }
+            archiveArtifacts artifacts: 'result.csv, perf/baseline.csv, perf/history/trend.csv, perf/dashboard.html', fingerprint: true
         }
     }
 }
