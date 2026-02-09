@@ -9,7 +9,7 @@ pipeline {
     environment {
         JMETER_HOME     = "C:\\tools\\apache-jmeter-5.6.3"
         PERF_THRESHOLD = "10"
-        SONAR_PROJECT  = "petclinic-rest-testing-demo"
+        // SONAR_PROJECT  = "petclinic-rest-testing-demo"
     }
 
     stages {

@@ -16,7 +16,11 @@
 
 package org.springframework.samples.petclinic.repository.jdbc;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
