@@ -22,7 +22,7 @@ pipeline {
 
         stage('Build + Tests') {
             steps {
-                bat "mvn clean verify"
+                sh "mvn clean verify"
             }
             post {
                 always {
@@ -33,9 +33,9 @@ pipeline {
 
         stage('JMeter Performance') {
             steps {
-                bat """
-                %JMETER_HOME%\\bin\\jmeter.bat -n ^
-                -t jmeter\\petclinic-smoke.jmx ^
+                sh """
+                $JMETER_HOME/bin/jmeter -n \
+                -t jmeter/petclinic-smoke.jmx \
                 -l result.csv
                 """
             }
@@ -43,11 +43,9 @@ pipeline {
 
         stage('Record Performance') {
             steps {
-                bat """
-                if not exist perf\\history mkdir perf\\history
-                C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
-                -ExecutionPolicy Bypass ^
-                -File perf\\extract.ps1 result.csv perf\\history\\trend.csv
+                sh """
+                if [ ! -d perf/history ]; then mkdir -p perf/history; fi
+                powershell -ExecutionPolicy Bypass -File perf/extract.ps1 result.csv perf/history/trend.csv
                 """
             }
         }
@@ -55,7 +53,7 @@ pipeline {
         stage('Fetch Baseline') {
     when { not { branch 'master' } }
     steps {
-        bat """
+        sh"""
         if not exist perf mkdir perf
         copy "%JENKINS_HOME%\\workspace\\petclinic-multibranch_master\\perf\\baseline.csv" perf\\baseline.csv
         """
@@ -67,10 +65,8 @@ pipeline {
             when { not { branch 'master' } }
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    bat """
-                    C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
-                    -ExecutionPolicy Bypass ^
-                    -File perf\\compare.ps1 perf\\baseline.csv result.csv %PERF_THRESHOLD%
+                     sh """
+                    powershell -ExecutionPolicy Bypass -File perf/compare.ps1 perf/baseline.csv result.csv $PERF_THRESHOLD
                     """
                 }
             }
@@ -91,9 +87,9 @@ pipeline {
         stage('Update Baseline') {
             when { branch 'master' }
             steps {
-                bat """
-                if not exist perf mkdir perf
-                copy result.csv perf\\baseline.csv
+                sh """
+                if [ ! -d perf ]; then mkdir -p perf; fi
+                cp result.csv perf/baseline.csv
                 """
             }
         }
@@ -111,10 +107,8 @@ pipeline {
 
         stage('HTML Dashboard') {
             steps {
-                bat """
-                C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ^
-                -ExecutionPolicy Bypass ^
-                -File perf\\dashboard.ps1
+                sh """
+                powershell -ExecutionPolicy Bypass -File perf/dashboard.ps1
                 """
             }
         }
