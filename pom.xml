@@ -275,6 +275,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
                 <version>3.3.1</version>
+                <configuration>
+                    <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+                    <sourceDirectories>${project.build.sourceDirectory}</sourceDirectories>
+                    <excludes>**/generated-sources/**/*</excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <phase>verify</phase>
