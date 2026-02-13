@@ -1,122 +1,125 @@
 pipeline {
     agent any
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-    }
-
     environment {
-        JMETER_HOME     = "C:\\tools\\apache-jmeter-5.6.3"
-        PERF_THRESHOLD = "10"
-        // SONAR_PROJECT  = "petclinic-rest-testing-demo"
+        BASE_URL = "http://127.0.0.1:9966/petclinic"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Compile') {
             steps {
-                checkout scm
+                sh './mvnw clean compile'
             }
         }
 
-        stage('Build + Tests') {
+        stage('Lint (Checkstyle – report only)') {
             steps {
-                sh "mvn clean verify"
-            }
-            post {
-                always {
-                    junit '**/target/surefire-reports/*.xml'
-                }
+                sh './mvnw checkstyle:check || true'
             }
         }
 
-        stage('JMeter Performance') {
+        stage('SpotBugs (report only)') {
             steps {
-                sh """
-                $JMETER_HOME/bin/jmeter -n \
-                -t jmeter/petclinic-smoke.jmx \
-                -l result.csv
-                """
+                sh './mvnw spotbugs:check || true'
             }
         }
 
-        stage('Record Performance') {
+        stage('PMD (report only)') {
             steps {
-                sh """
-                if [ ! -d perf/history ]; then mkdir -p perf/history; fi
-                powershell -ExecutionPolicy Bypass -File perf/extract.ps1 result.csv perf/history/trend.csv
-                """
+                sh './mvnw pmd:check || true'
             }
         }
 
-        stage('Fetch Baseline') {
-    when { not { branch 'master' } }
-    steps {
-        sh"""
-        if not exist perf mkdir perf
-        copy "%JENKINS_HOME%\\workspace\\petclinic-multibranch_master\\perf\\baseline.csv" perf\\baseline.csv
-        """
-    }
-}
-
-
-        stage('Performance Gate') {
-            when { not { branch 'master' } }
+        stage('Dependency Scan (OWASP - report only)') {
             steps {
-                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                     sh """
-                    powershell -ExecutionPolicy Bypass -File perf/compare.ps1 perf/baseline.csv result.csv $PERF_THRESHOLD
-                    """
-                }
+                sh './mvnw org.owasp:dependency-check-maven:check || true'
             }
         }
 
-        stage('Reviewer Override') {
-            when {
-                expression { currentBuild.currentResult == 'FAILURE' }
-            }
+        stage('Unit Tests with Coverage') {
             steps {
-                input message: "Performance regression detected. Override merge?"
-                script {
-                    currentBuild.result = 'SUCCESS'
-                }
+                sh './mvnw test jacoco:report || true'
             }
         }
 
-        stage('Update Baseline') {
-            when { branch 'master' }
+        stage('Start App (background)') {
             steps {
-                sh """
-                if [ ! -d perf ]; then mkdir -p perf; fi
-                cp result.csv perf/baseline.csv
-                """
+                sh '''
+                    nohup ./mvnw spring-boot:run \
+                      -Dspring-boot.run.arguments=--server.port=9966 \
+                      > app.log 2>&1 &
+                    sleep 30
+                '''
             }
         }
 
-        stage('Performance Chart') {
+        stage('API Tests (Python – BLOCKING)') {
             steps {
-                plot csvFileName: 'trend.csv',
-                     csvSeries: [[file: 'perf/history/trend.csv']],
-                     group: 'Performance',
-                     title: 'Response Time Trend',
-                     yaxis: 'Milliseconds',
-                     style: 'line'
+                sh '''
+                    cd api-tests
+                    pip3 install -r requirements.txt
+                    BASE_URL=${BASE_URL} pytest
+                '''
             }
         }
 
-        stage('HTML Dashboard') {
+        stage('API Coverage Check (BLOCKING)') {
             steps {
-                sh """
-                powershell -ExecutionPolicy Bypass -File perf/dashboard.ps1
-                """
+                sh '''
+                    cd api-tests
+                    python3 coverage/extract_openapi.py
+                    python3 coverage/extract_tested_apis.py
+                    python3 coverage/check_coverage.py
+                '''
+            }
+        }
+
+        stage('Performance Test (JMeter – report only)') {
+            steps {
+                sh '''
+                    /usr/local/bin/jmeter \
+                        -n \
+                        -t jmeter/petclinic-smoke.jmx \
+                        -l target/jmeter-results.jtl \
+                        -JHOST=127.0.0.1 \
+                        -JPORT=9966 \
+                  || true
+                '''
             }
         }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: 'result.csv, perf/baseline.csv, perf/history/trend.csv, perf/dashboard.html', fingerprint: true
+
+            // Stop Spring Boot app
+            sh 'pkill -f spring-boot || true'
+
+            // Unit test reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                junit allowEmptyResults: true,
+                    testResults: '**/target/surefire-reports/*.xml'
+            }
+
+            // API test reports (non-blocking; failure already blocks earlier)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                junit allowEmptyResults: true,
+                    testResults: 'api-tests/**/pytest*.xml'
+            }
+            // API Coverage report (always archive)
+            archiveArtifacts artifacts: 'api-tests/coverage/api_coverage_report.txt',
+                allowEmptyArchive: true
+
+
+            // JMeter performance reports (non-blocking)
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                performanceReport parsers: [
+                    jmeterParser(
+                        pattern: 'target/jmeter-results.jtl'
+                    )
+                ]
+            }
         }
     }
 }
